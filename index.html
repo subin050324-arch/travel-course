@@ -1,175 +1,250 @@
-<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>여행지 탐색</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><link rel="stylesheet" href="css/style.css"></head><body>
-<main>
- <div class="bar">
-  <select id="area"><option value="">전체 지역</option></select>
-  <select id="sgg"><option value="">전체 시/군/구</option></select>
-  <select id="type"><option value="">전체 유형</option></select>
-  <input id="kw" placeholder="이름 또는 동네 (예: 한옥, 맛집, 성수동 맛집)">
-  <select id="radius" title="반경">
-   <option value="1000">반경 1km</option><option value="3000" selected>반경 3km</option>
-   <option value="5000">반경 5km</option><option value="10000">반경 10km</option><option value="20000">반경 20km</option>
-  </select>
-  <button class="pri" id="go">검색</button>
-  <button id="near">📍 내 주변</button>
- </div>
- <p id="info" style="margin:0 0 10px;color:var(--sub);font-size:14px"></p>
- <div class="split"><div><div class="list" id="list"></div>
-  <div class="pager"><button id="prev">◀</button><span id="pg">1</span><button id="next">▶</button></div></div>
- <div id="map"></div></div>
-</main>
-<script src="js/config.js"></script><script src="js/common.js"></script>
-<script>
-header("i");
-const map = L.map("map").setView([36.5, 127.8], 7);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: "© OpenStreetMap"}).addTo(map);
-let layer = L.layerGroup().addTo(map), page = 1, total = 0;
-let S = {kind: "area", kw: "", center: null};   // 현재 검색 상태: area(지역 목록) / name(이름 검색) / center(좌표 반경 검색)
-const $ = id => document.getElementById(id);
-const ROWS = 12;
-// 한국 영역 안의 정상 좌표인지 검사 (API 데이터에 좌표 오류가 섞여 있을 수 있음)
-const okXY = p => p.lat > 32.5 && p.lat < 39 && p.lng > 124 && p.lng < 132;
-// 검색어에 이 단어가 들어 있으면 해당 유형 필터로 바꿔주는 별칭
-const ALIAS = {"맛집":"39","음식점":"39","식당":"39","숙소":"32","숙박":"32","호텔":"32",
-               "관광지":"12","축제":"15","행사":"15","쇼핑":"38","레포츠":"28","문화시설":"14","박물관":"14"};
-// 동/구/군/읍/면/로/길로 끝나면 지역(동네) 검색으로 취급
-const isRegion = kw => kw.length >= 2 && /(동|구|군|읍|면|리|로|길)$/.test(kw);
-const selText = id => $(id).value ? $(id).selectedOptions[0].text : "";
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>여행지 탐색</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main>
+    <div class="bar">
+      <select id="area"><option value="">전체 지역</option></select>
+      <select id="sgg"><option value="">전체 시/군/구</option></select>
+      <select id="type"><option value="">전체 유형</option></select>
+      <input id="kw" placeholder="이름 또는 동네 (예: 한옥, 맛집, 성수동 맛집)">
+      <select id="radius" title="반경">
+        <option value="1000">반경 1km</option>
+        <option value="3000" selected>반경 3km</option>
+        <option value="5000">반경 5km</option>
+        <option value="10000">반경 10km</option>
+        <option value="20000">반경 20km</option>
+      </select>
+      <button class="pri" id="go">검색</button>
+      <button id="near">📍 내 주변</button>
+    </div>
+    <p id="info" style="margin:0 0 10px;color:var(--sub);font-size:14px"></p>
+    <div class="split">
+      <div>
+        <div class="list" id="list"></div>
+        <div class="pager">
+          <button id="prev">◀</button>
+          <span id="pg">1</span>
+          <button id="next">▶</button>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+  </main>
 
-Object.entries(TYPES).forEach(([k, v]) => $("type").add(new Option(v, k)));
-api("areaCode2", {numOfRows: 50, pageNo: 1}).then(r => r.items.forEach(a => $("area").add(new Option(a.name, a.code)))).catch(()=>{});
+  <script src="js/config.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    header("i");
+    const map = L.map("map").setView([36.5, 127.8], 7);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
+    
+    let layer = L.layerGroup().addTo(map), page = 1, total = 0;
+    let S = { kind: "area", kw: "", center: null }; // 현재 검색 상태: area(지역 목록) / name(이름 검색) / center(좌표 반경 검색)
+    
+    const $ = id => document.getElementById(id);
+    const ROWS = 12;
+    
+    // 한국 영역 안의 정상 좌표인지 검사 (API 데이터에 좌표 오류가 섞여 있을 수 있음)
+    const okXY = p => p.lat > 32.5 && p.lat < 39 && p.lng > 124 && p.lng < 132;
+    
+    // 검색어에 이 단어들 중 하나가 들어 있으면 해당 유형 필터로 바꿔주는 별칭
+    const ALIAS = {
+      "맛집": "39", "음식점": "39", "식당": "39", 
+      "숙소": "32", "숙박": "32", "호텔": "32",
+      "관광지": "12", "축제": "15", "행사": "15", 
+      "쇼핑": "38", "레포츠": "28", "문화시설": "14", "박물관": "14"
+    };
+    
+    // 동/구/군/읍/면/로/길로 끝나면 지역(동네) 검색으로 취급
+    const isRegion = kw => kw.length >= 2 && /(동|구|군|읍|면|리|로|길)$/.test(kw);
+    const selText = id => $(id).value ? $(id).selectedOptions[0].text : "";
 
-// 검색창 글자는 그대로 두고, 내부에서만 별칭 단어를 분리한다
-function parseKeyword(raw) {
-  let kw = raw.trim(), type = $("type").value;
-  for (const w of Object.keys(ALIAS).sort((a, b) => b.length - a.length)) {
-    if (kw.includes(w)) { type = ALIAS[w]; kw = kw.split(w).join(" ").replace(/\s+/g, " ").trim(); break; }
-  }
-  return { kw, type };
-}
+    Object.entries(TYPES).forEach(([k, v]) => $("type").add(new Option(v, k)));
+    api("areaCode2", { numOfRows: 50, pageNo: 1 }).then(r => r.items.forEach(a => $("area").add(new Option(a.name, a.code)))).catch(() => {});
 
-// 지오코딩: 동네 이름 → 좌표 (OpenStreetMap Nominatim)
-async function geocode(q) {
-  const pre = [selText("area"), selText("sgg")].filter(Boolean).join(" ");
-  try {
-    const r = await fetch("https://nominatim.openstreetmap.org/search?" + new URLSearchParams(
-      {q: (pre + " " + q).trim(), format: "json", limit: 1, countrycodes: "kr", "accept-language": "ko"}));
-    const j = await r.json();
-    return j.length ? {lat: +j[0].lat, lng: +j[0].lon, label: q} : null;
-  } catch { return null; }
-}
-
-// 검색 버튼: 검색어를 해석해서 검색 상태(S)를 정한 뒤 목록을 불러온다
-async function search() {
-  page = 1;
-  const { kw, type } = parseKeyword($("kw").value);
-  if ($("type").value !== type) $("type").value = type;
-  S = {kind: "area", kw: "", center: null};
-  if (kw) {
-    $("list").innerHTML = '<div class="msg">검색 중…</div>';
-    const c = isRegion(kw) ? await geocode(kw) : null;
-    S = c ? {kind: "center", center: c} : {kind: "name", kw};
-  }
-  load();
-}
-
-async function load() {
-  $("list").innerHTML = '<div class="msg">불러오는 중…</div>';
-  try {
-    const type = $("type").value, base = {numOfRows: ROWS, pageNo: page};
-    if (type) base.contentTypeId = type;
-    let r;
-    if (S.kind === "center") {
-      r = await api("locationBasedList2", {...base, mapX: S.center.lng, mapY: S.center.lat, radius: $("radius").value, arrange: "E"});
-    } else {
-      const p = {...base, arrange: "O"};
-      if ($("area").value) p.areaCode = $("area").value;
-      if ($("sgg").value) p.sigunguCode = $("sgg").value;
-      if (S.kind === "name") {
-        r = await api("searchKeyword2", {...p, keyword: S.kw});
-        if (!r.items.length && !S.geoTried) {          // 이름 결과가 없으면 동네 이름일 수 있으니 한 번 더 시도
-          S.geoTried = true;
-          const c = await geocode(S.kw);
-          if (c) { S = {kind: "center", center: c}; return load(); }
+    // 검색창 글자는 그대로 두고, 내부에서만 별칭 단어를 분리한다
+    function parseKeyword(raw) {
+      let kw = raw.trim(), type = $("type").value;
+      for (const w of Object.keys(ALIAS).sort((a, b) => b.length - a.length)) {
+        if (kw.includes(w)) { 
+          type = ALIAS[w]; 
+          kw = kw.split(w).join(" ").replace(/\s+/g, " ").trim(); 
+          break; 
         }
-      } else r = await api("areaBasedList2", p);
+      }
+      return { kw, type };
     }
-    total = +r.total; render(r.items);
-  } catch (e) { $("list").innerHTML = '<div class="msg">⚠️ ' + esc(e.message) + '</div>'; }
-}
 
-function info() {
-  const t = selText("type") || "전체 유형";
-  if (S.kind === "center") return `📍 "${S.center.label}" 중심 ${$("radius").value / 1000}km 이내 · ${t} · ${total}곳 (가까운 순)`;
-  if (S.kind === "name") return `🔎 "${S.kw}" 이름 검색 · ${t} · ${total}곳`;
-  return `🗺 ${[selText("area") || "전국", selText("sgg")].filter(Boolean).join(" ")} · ${t} · ${total}곳`;
-}
-
-function render(items) {
-  $("list").scrollTop = 0;
-  $("pg").textContent = page + " / " + Math.max(1, Math.ceil(total / ROWS));
-  $("info").textContent = info();
-  layer.clearLayers();
-  let circle = null;
-  if (S.kind === "center") {
-    const c = [S.center.lat, S.center.lng];
-    circle = L.circle(c, {radius: +$("radius").value, color: "#0f766e", weight: 2, fillOpacity: 0.07}).addTo(layer);
-    L.circleMarker(c, {radius: 6, color: "#e11d48", fillOpacity: 1}).addTo(layer).bindPopup(esc(S.center.label));
-  }
-  if (!items.length) { $("list").innerHTML = '<div class="msg">결과가 없습니다<br>반경을 넓히거나 유형을 바꿔보세요</div>'; if (circle) map.fitBounds(circle.getBounds()); return; }
-  const pts = [];
-  $("list").innerHTML = items.map(i => {
-    const p = toPlace(i), has = Course.has(p.id);
-    return `<div class="item">${p.img ? '<img src="'+esc(p.img)+'" loading="lazy">' : '<div class="noimg"></div>'}
-      <div><a href="detail.html?id=${p.id}"><h3>${esc(p.title)}</h3></a><p>${esc(p.addr)}</p>
-      ${i.dist ? '<p>' + fmtKm(i.dist / 1000) + '</p>' : ''}
-      ${okXY(p) ? '' : '<p>⚠️ 좌표 오류 (지도 표시 불가)</p>'}
-      <div class="btns"><button class="sm" data-id="${p.id}">${has ? '✔ 담김' : '+ 코스에 담기'}</button></div></div></div>`;
-  }).join("");
-  items.forEach(i => {
-    const p = toPlace(i); if (!okXY(p)) return;     // 좌표가 잘못된 장소는 지도에서 제외
-    L.marker([p.lat, p.lng]).addTo(layer).bindPopup(`<b>${esc(p.title)}</b><br><a href="detail.html?id=${p.id}">상세보기</a>`);
-    pts.push([p.lat, p.lng]);
-  });
-  if (circle) map.fitBounds(circle.getBounds(), {padding: [20, 20]});
-  else if (pts.length) map.fitBounds(pts, {padding: [30, 30], maxZoom: 13});
-  // 담기 / 담김 토글
-  $("list").onclick = e => {
-    const b = e.target.closest("button[data-id]"); if (!b) return;
-    const p = toPlace(items.find(x => x.contentid === b.dataset.id));
-    if (Course.has(p.id)) {
-      Course.remove(p.id); b.textContent = "+ 코스에 담기"; toast("코스에서 뺐어요");
-    } else {
-      if (!okXY(p)) return toast("좌표가 잘못된 장소라 코스에 담을 수 없어요");
-      Course.add(p); b.textContent = "✔ 담김"; toast("코스에 담았어요");
+    // 지오코딩: 동네 이름 → 좌표 (OpenStreetMap Nominatim)
+    async function geocode(q) {
+      const pre = [selText("area"), selText("sgg")].filter(Boolean).join(" ");
+      try {
+        const r = await fetch("https://nominatim.openstreetmap.org/search?" + new URLSearchParams(
+          { q: (pre + " " + q).trim(), format: "json", limit: 1, countrycodes: "kr", "accept-language": "ko" }));
+        const j = await r.json();
+        return j.length ? { lat: +j[0].lat, lng: +j[0].lon, label: q } : null;
+      } catch { return null; }
     }
-  };
-}
 
-$("go").onclick = search;
-$("kw").onkeydown = e => { if (e.key === "Enter") search(); };
-// 좌표 검색 중에는 중심을 유지한 채 유형/반경만 바꾼다
-$("type").onchange = () => { if (S.kind === "center") { page = 1; load(); } else search(); };
-$("radius").onchange = () => { if (S.kind === "center") { page = 1; load(); } };
-$("sgg").onchange = search;
-$("area").onchange = async () => {
-  $("sgg").innerHTML = '<option value="">전체 시/군/구</option>';
-  if ($("area").value) {
-    try {
-      const r = await api("areaCode2", {areaCode: $("area").value, numOfRows: 100, pageNo: 1});
-      r.items.forEach(a => $("sgg").add(new Option(a.name, a.code)));
-    } catch {}
-  }
-  search();
-};
-$("prev").onclick = () => { if (page > 1) { page--; load(); } };
-$("next").onclick = () => { if (page * ROWS < total) { page++; load(); } };
-$("near").onclick = () => navigator.geolocation.getCurrentPosition(
-  pos => {
-    $("kw").value = ""; page = 1;
-    S = {kind: "center", center: {lat: pos.coords.latitude, lng: pos.coords.longitude, label: "내 위치"}};
-    load();
-  },
-  () => toast("위치 권한이 필요해요"));
-search();
-</script></body></html>
+    // 검색 버튼: 검색어를 해석해서 검색 상태(S)를 정한 뒤 목록을 불러온다
+    async function search() {
+      page = 1;
+      const { kw, type } = parseKeyword($("kw").value);
+      if ($("type").value !== type) $("type").value = type;
+      S = { kind: "area", kw: "", center: null };
+      
+      if (kw) {
+        $("list").innerHTML = '<div class="msg">검색 중…</div>';
+        const c = isRegion(kw) ? await geocode(kw) : null;
+        S = c ? { kind: "center", center: c } : { kind: "name", kw };
+      }
+      load();
+    }
+
+    async function load() {
+      $("list").innerHTML = '<div class="msg">불러오는 중…</div>';
+      try {
+        const type = $("type").value, base = { numOfRows: ROWS, pageNo: page };
+        if (type) base.contentTypeId = type;
+        let r;
+        
+        if (S.kind === "center") {
+          r = await api("locationBasedList2", { ...base, mapX: S.center.lng, mapY: S.center.lat, radius: $("radius").value, arrange: "E" });
+        } else {
+          const p = { ...base, arrange: "O" };
+          if ($("area").value) p.areaCode = $("area").value;
+          if ($("sgg").value) p.sigunguCode = $("sgg").value;
+          
+          if (S.kind === "name") {
+            r = await api("searchKeyword2", { ...p, keyword: S.kw });
+            if (!r.items.length && !S.geoTried) { // 이름 결과가 없으면 동네 이름일 수 있으니 한 번 더 시도
+              S.geoTried = true;
+              const c = await geocode(S.kw);
+              if (c) { S = { kind: "center", center: c }; return load(); }
+            }
+          } else {
+            r = await api("areaBasedList2", p);
+          }
+        }
+        total = +r.total; 
+        render(r.items);
+      } catch (e) { 
+        $("list").innerHTML = '<div class="msg">⚠️ ' + esc(e.message) + '</div>'; 
+      }
+    }
+
+    function info() {
+      const t = selText("type") || "전체 유형";
+      if (S.kind === "center") return `📍 "${S.center.label}" 중심 ${$("radius").value / 1000}km 이내 · ${t} · ${total}곳 (가까운 순)`;
+      if (S.kind === "name") return `🔎 "${S.kw}" 이름 검색 · ${t} · ${total}곳`;
+      return `🗺 ${[selText("area") || "전국", selText("sgg")].filter(Boolean).join(" ")} · ${t} · ${total}곳`;
+    }
+
+    function render(items) {
+      $("list").scrollTop = 0;
+      $("pg").textContent = page + " / " + Math.max(1, Math.ceil(total / ROWS));
+      $("info").textContent = info();
+      layer.clearLayers();
+      
+      let circle = null;
+      if (S.kind === "center") {
+        const c = [S.center.lat, S.center.lng];
+        circle = L.circle(c, { radius: +$("radius").value, color: "#0f766e", weight: 2, fillOpacity: 0.07 }).addTo(layer);
+        L.circleMarker(c, { radius: 6, color: "#e11d48", fillOpacity: 1 }).addTo(layer).bindPopup(esc(S.center.label));
+      }
+      
+      if (!items.length) { 
+        $("list").innerHTML = '<div class="msg">결과가 없습니다<br>반경을 넓히거나 유형을 바꿔보세요</div>'; 
+        if (circle) map.fitBounds(circle.getBounds()); 
+        return; 
+      }
+      
+      const pts = [];
+      $("list").innerHTML = items.map(i => {
+        const p = toPlace(i), has = Course.has(p.id);
+        return `
+          <div class="item">
+            ${p.img ? '<img src="' + esc(p.img) + '" loading="lazy">' : '<div class="noimg"></div>'}
+            <div>
+              <a href="detail.html?id=${p.id}"><h3>${esc(p.title)}</h3></a>
+              <p>${esc(p.addr)}</p>
+              ${i.dist ? '<p>' + fmtKm(i.dist / 1000) + '</p>' : ''}
+              ${okXY(p) ? '' : '<p>⚠️ 좌표 오류 (지도 표시 불가)</p>'}
+              <div class="btns"><button class="sm" data-id="${p.id}">${has ? '✔ 담김' : '+ 코스에 담기'}</button></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+      
+      items.forEach(i => {
+        const p = toPlace(i); 
+        if (!okXY(p)) return; // 좌표가 잘못된 장소는 지도에서 제외
+        L.marker([p.lat, p.lng]).addTo(layer).bindPopup(`<b>${esc(p.title)}</b><br><a href="detail.html?id=${p.id}">상세보기</a>`);
+        pts.push([p.lat, p.lng]);
+      });
+      
+      if (circle) map.fitBounds(circle.getBounds(), { padding: [20, 20] });
+      else if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 13 });
+      
+      // 담기 / 담김 토글
+      $("list").onclick = e => {
+        const b = e.target.closest("button[data-id]"); 
+        if (!b) return;
+        const p = toPlace(items.find(x => x.contentid === b.dataset.id));
+        if (Course.has(p.id)) {
+          Course.remove(p.id); 
+          b.textContent = "+ 코스에 담기"; 
+          toast("코스에서 뺐어요");
+        } else {
+          if (!okXY(p)) return toast("좌표가 잘못된 장소라 코스에 담을 수 없어요");
+          Course.add(p); 
+          b.textContent = "✔ 담김"; 
+          toast("코스에 담았어요");
+        }
+      };
+    }
+
+    $("go").onclick = search;
+    $("kw").onkeydown = e => { if (e.key === "Enter") search(); };
+    
+    // 좌표 검색 중에는 중심을 유지한 채 유형/반경만 바꾼다
+    $("type").onchange = () => { if (S.kind === "center") { page = 1; load(); } else search(); };
+    $("radius").onchange = () => { if (S.kind === "center") { page = 1; load(); } };
+    $("sgg").onchange = search;
+    
+    $("area").onchange = async () => {
+      $("sgg").innerHTML = '<option value="">전체 시/군/구</option>';
+      if ($("area").value) {
+        try {
+          const r = await api("areaCode2", { areaCode: $("area").value, numOfRows: 100, pageNo: 1 });
+          r.items.forEach(a => $("sgg").add(new Option(a.name, a.code)));
+        } catch {}
+      }
+      search();
+    };
+    
+    $("prev").onclick = () => { if (page > 1) { page--; load(); } };
+    $("next").onclick = () => { if (page * ROWS < total) { page++; load(); } };
+    
+    $("near").onclick = () => navigator.geolocation.getCurrentPosition(
+      pos => {
+        $("kw").value = ""; 
+        page = 1;
+        S = { kind: "center", center: { lat: pos.coords.latitude, lng: pos.coords.longitude, label: "내 위치" } };
+        load();
+      },
+      () => toast("위치 권한이 필요해요")
+    );
+    
+    search();
+  </script>
+</body>
+</html>
