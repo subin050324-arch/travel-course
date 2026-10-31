@@ -9,6 +9,7 @@ header("i");
   if (!id) { root.innerHTML = '<div class="msg">잘못된 접근입니다</div>'; return; }
   try {
     const i = (await api("detailCommon2", {contentId: id})).items[0], p = toPlace(i);
+    const okXY = p.lat > 32.5 && p.lat < 39 && p.lng > 124 && p.lng < 132;
     root.innerHTML = `<a href="index.html">← 목록으로</a>
       <h1>${esc(i.title)} <small style="color:var(--sub);font-size:14px">${TYPES[i.contenttypeid] || ""}</small></h1>
       ${p.img ? '<img class="hero" src="'+esc(p.img)+'">' : ''}
@@ -18,13 +19,19 @@ header("i");
        <p style="line-height:1.7">${esc(i.overview || "소개 정보가 없습니다.").replace(/\n/g, "<br>")}</p>
        <button class="pri" id="add">${Course.has(p.id) ? "✔ 담김" : "+ 내 코스에 담기"}</button></div>
        <div id="map"></div></div>`;
-    if (p.lat) {
+    if (okXY) {
       const m = L.map("map").setView([p.lat, p.lng], 14);
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: "© OpenStreetMap"}).addTo(m);
       L.marker([p.lat, p.lng]).addTo(m);
-    }
+    } else document.getElementById("map").innerHTML = '<div class="msg">위치 정보가 없거나 좌표가 올바르지 않아요</div>';
+    // 담기 / 담김 토글
     document.getElementById("add").onclick = e => {
-      if (Course.add(p)) { e.target.textContent = "✔ 담김"; toast("코스에 담았어요"); } else toast("이미 담겨 있어요");
+      if (Course.has(p.id)) {
+        Course.remove(p.id); e.target.textContent = "+ 내 코스에 담기"; toast("코스에서 뺐어요");
+      } else {
+        if (!okXY) return toast("좌표가 잘못된 장소라 코스에 담을 수 없어요");
+        Course.add(p); e.target.textContent = "✔ 담김"; toast("코스에 담았어요");
+      }
     };
   } catch (e) { root.innerHTML = '<div class="msg">⚠️ ' + esc(e.message) + '</div>'; }
 })();
