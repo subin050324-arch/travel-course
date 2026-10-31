@@ -4,7 +4,7 @@
  <div class="bar">
   <select id="area"><option value="">전체 지역</option></select>
   <select id="type"><option value="">전체 유형</option></select>
-  <input id="kw" placeholder="키워드 검색 (예: 해변, 한옥)">
+  <input id="kw" placeholder="키워드 검색 (예: 해변, 한옥, 맛집)">
   <button class="pri" id="go">검색</button>
   <button id="near">📍 내 주변</button>
  </div>
@@ -20,6 +20,9 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: "© 
 let layer = L.layerGroup().addTo(map), page = 1, total = 0, geo = null;
 const $ = id => document.getElementById(id);
 const ROWS = 12;
+// 키워드가 유형 이름이면 유형 필터로 바꿔주는 별칭
+const ALIAS = {"맛집":"39","음식점":"39","식당":"39","음식":"39","숙소":"32","숙박":"32","호텔":"32","관광지":"12","관광":"12",
+               "축제":"15","행사":"15","축제/행사":"15","쇼핑":"38","레포츠":"28","문화시설":"14","박물관":"14"};
 
 Object.entries(TYPES).forEach(([k, v]) => $("type").add(new Option(v, k)));
 api("areaCode2", {numOfRows: 50, pageNo: 1}).then(r => r.items.forEach(a => $("area").add(new Option(a.name, a.code)))).catch(()=>{});
@@ -27,7 +30,9 @@ api("areaCode2", {numOfRows: 50, pageNo: 1}).then(r => r.items.forEach(a => $("a
 async function load() {
   $("list").innerHTML = '<div class="msg">불러오는 중…</div>';
   try {
-    const kw = $("kw").value.trim(), p = {numOfRows: ROWS, pageNo: page, arrange: "O"};
+    let kw = $("kw").value.trim();
+    if (ALIAS[kw]) { $("type").value = ALIAS[kw]; $("kw").value = ""; kw = ""; }
+    const p = {numOfRows: ROWS, pageNo: page, arrange: "O"};
     if ($("area").value) p.areaCode = $("area").value;
     if ($("type").value) p.contentTypeId = $("type").value;
     let r;
@@ -64,6 +69,7 @@ function render(items) {
 }
 $("go").onclick = () => { geo = null; page = 1; load(); };
 $("kw").onkeydown = e => { if (e.key === "Enter") $("go").click(); };
+$("type").onchange = $("area").onchange = () => { geo = null; page = 1; load(); };
 $("prev").onclick = () => { if (page > 1) { page--; load(); } };
 $("next").onclick = () => { if (page * ROWS < total) { page++; load(); } };
 $("near").onclick = () => navigator.geolocation.getCurrentPosition(
