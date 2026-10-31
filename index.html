@@ -38,6 +38,7 @@ async function load() {
   } catch (e) { $("list").innerHTML = '<div class="msg">⚠️ ' + esc(e.message) + '</div>'; }
 }
 function render(items) {
+  $("list").scrollTop = 0;
   $("pg").textContent = page + " / " + Math.max(1, Math.ceil(total / ROWS));
   layer.clearLayers();
   if (!items.length) { $("list").innerHTML = '<div class="msg">결과가 없습니다</div>'; return; }
@@ -46,7 +47,7 @@ function render(items) {
     const p = toPlace(i), has = Course.has(p.id);
     return `<div class="item">${p.img ? '<img src="'+esc(p.img)+'" loading="lazy">' : '<div class="noimg"></div>'}
       <div><a href="detail.html?id=${p.id}"><h3>${esc(p.title)}</h3></a><p>${esc(p.addr)}</p>
-      ${i.dist ? '<p>'+(i.dist/1000).toFixed(1)+' km</p>' : ''}
+      ${i.dist ? '<p>'+fmtKm(i.dist/1000)+'</p>' : ''}
       <div class="btns"><button class="sm" data-id="${p.id}">${has ? '✔ 담김' : '+ 코스에 담기'}</button></div></div></div>`;
   }).join("");
   items.forEach(i => {
@@ -66,7 +67,7 @@ $("kw").onkeydown = e => { if (e.key === "Enter") $("go").click(); };
 $("prev").onclick = () => { if (page > 1) { page--; load(); } };
 $("next").onclick = () => { if (page * ROWS < total) { page++; load(); } };
 $("near").onclick = () => navigator.geolocation.getCurrentPosition(
-  pos => { geo = {lat: pos.coords.latitude, lng: pos.coords.longitude}; page = 1; load(); },
+  pos => { geo = {lat: pos.coords.latitude, lng: pos.coords.longitude}; $("kw").value = ""; page = 1; load(); },
   () => toast("위치 권한이 필요해요"));
 load();
 </script></body></html>
