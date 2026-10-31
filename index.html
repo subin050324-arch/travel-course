@@ -20,9 +20,9 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: "© 
 let layer = L.layerGroup().addTo(map), page = 1, total = 0, geo = null;
 const $ = id => document.getElementById(id);
 const ROWS = 12;
-// 키워드가 유형 이름이면 유형 필터로 바꿔주는 별칭
-const ALIAS = {"맛집":"39","음식점":"39","식당":"39","음식":"39","숙소":"32","숙박":"32","호텔":"32","관광지":"12","관광":"12",
-               "축제":"15","행사":"15","축제/행사":"15","쇼핑":"38","레포츠":"28","문화시설":"14","박물관":"14"};
+// 검색어에 이 단어가 들어 있으면 해당 유형 필터로 바꿔주는 별칭
+const ALIAS = {"맛집":"39","음식점":"39","식당":"39","숙소":"32","숙박":"32","호텔":"32",
+               "관광지":"12","축제":"15","행사":"15","쇼핑":"38","레포츠":"28","문화시설":"14","박물관":"14"};
 
 Object.entries(TYPES).forEach(([k, v]) => $("type").add(new Option(v, k)));
 api("areaCode2", {numOfRows: 50, pageNo: 1}).then(r => r.items.forEach(a => $("area").add(new Option(a.name, a.code)))).catch(()=>{});
@@ -31,7 +31,10 @@ async function load() {
   $("list").innerHTML = '<div class="msg">불러오는 중…</div>';
   try {
     let kw = $("kw").value.trim();
-    if (ALIAS[kw]) { $("type").value = ALIAS[kw]; $("kw").value = ""; kw = ""; }
+    // 긴 별칭부터 검사 (예: "음식점"이 "식당"보다 먼저)
+    for (const w of Object.keys(ALIAS).sort((a, b) => b.length - a.length)) {
+      if (kw.includes(w)) { $("type").value = ALIAS[w]; kw = kw.replace(w, "").trim(); $("kw").value = kw; break; }
+    }
     const p = {numOfRows: ROWS, pageNo: page, arrange: "O"};
     if ($("area").value) p.areaCode = $("area").value;
     if ($("type").value) p.contentTypeId = $("type").value;
