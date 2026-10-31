@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>내 코스</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><link rel="stylesheet" href="css/style.css"></head><body>
+<main>
+ <div class="bar">
+  <button class="pri" id="opt">⚡ 최단 순서로 자동 정렬</button>
+  <button id="me">📍 내 위치에서 출발</button>
+  <button id="clear">🗑 전체 삭제</button>
+  <select id="speed"><option value="30">시내 30km/h</option><option value="60" selected>일반 60km/h</option><option value="90">고속 90km/h</option></select>
+ </div>
+ <div class="stats"><div class="stat">장소<b id="sN">0</b></div><div class="stat">총 거리<b id="sD">0 km</b></div><div class="stat">예상 이동시간<b id="sT">-</b></div></div>
+ <div class="split"><div><div class="list" id="list" style="max-height:none"></div>
+  <div class="panel" style="margin-top:12px"><b>구간별 거리 (km)</b><div class="bars" id="bars"></div></div></div>
+ <div id="map"></div></div>
+</main>
+<script src="js/config.js"></script><script src="js/common.js"></script>
+<script>
+header("p");
+const $ = id => document.getElementById(id);
+const map = L.map("map").setView([36.5, 127.8], 7);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: "© OpenStreetMap"}).addTo(map);
+const layer = L.layerGroup().addTo(map);
+let me = null;
+
+function legs(a) { const o = []; for (let i = 1; i < a.length; i++) o.push(haversine(a[i-1], a[i])); return o; }
+function draw() {
+  const a = Course.get(), path = me ? [me, ...a] : a, lg = legs(path);
+  const sum = lg.reduce((x, y) => x + y, 0) * 1.3; // 직선거리 → 도로거리 보정(약 1.3배)
+  const mins = Math.round(sum / $("speed").value * 60);
+  $("sN").textContent = a.length; $("sD").textContent = sum.toFixed(1) + " km";
+  $("sT").textContent = a.length < 2 ? "-" : (mins >= 60 ? Math.floor(mins/60) + "시간 " : "") + mins % 60 + "분";
+  $("list").innerHTML = a.length ? a.map((p, i) => `
+    <div class="item"><div class="num">${i+1}</div><div style="flex:1"><h3><a href="detail.html?id=${p.id}">${esc(p.title)}</a></h3><p>${esc(p.addr)}</p>
+    <div class="btns"><button class="sm" data-a="up" data-i="${i}">▲</button><button class="sm" data-a="down" data-i="${i}">▼</button><button class="sm" data-a="del" data-i="${i}">삭제</button></div></div></div>
+    ${i < a.length-1 ? '<div class="leg">↓ '+(legs(a)[i]).toFixed(1)+' km</div>' : ''}`).join("")
+    : '<div class="msg">담긴 장소가 없어요.<br><a href="index.html">여행지 탐색하러 가기</a></div>';
+  layer.clearLayers();
+  if (me) L.circleMarker([me.lat, me.lng], {radius: 8, color: "#e11d48"}).addTo(layer).bindPopup("내 위치");
+  a.forEach((p, i) => L.marker([p.lat, p.lng], {icon: L.divIcon({className: "", html: '<div class="pin">'+(i+1)+'</div>', iconSize: [26, 26]})}).addTo(layer).bindPopup(esc(p.title)));
+  if (path.length > 1) L.polyline(path.map(p => [p.lat, p.lng]), {color: "#0f766e", weight: 4}).addTo(layer);
+  if (path.length) map.fitBounds(path.map(p => [p.lat, p.lng]), {padding: [40, 40], maxZoom: 12});
+  const l2 = legs(a), mx = Math.max(...l2, 1);
+  $("bars").innerHTML = l2.map((d, i) => '<div style="height:'+(d/mx*100)+'%"><span>'+d.toFixed(0)+'</span></div>').join("") || '<small>2곳 이상 담으면 표시돼요</small>';
+}
+$("list").onclick = e => {
+  const b = e.target.closest("button[data-a]"); if (!b) return;
+  const a = Course.get(), i = +b.dataset.i, k = b.dataset.a;
+  if (k === "del") a.splice(i, 1);
+  else { const j = k === "up" ? i - 1 : i + 1; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; }
+  Course.set(a); draw();
+};
+$("opt").onclick = () => { const a = Course.get(); if (a.length < 2) return toast("2곳 이상 담아주세요"); Course.set(nearestNeighbor(a, me)); draw(); toast("최단 순서로 정렬했어요"); };
+$("me").onclick = () => navigator.geolocation.getCurrentPosition(p => { me = {lat: p.coords.latitude, lng: p.coords.longitude}; draw(); toast("내 위치를 출발지로 설정"); }, () => toast("위치 권한이 필요해요"));
+$("clear").onclick = () => { if (confirm("코스를 모두 삭제할까요?")) { Course.set([]); draw(); } };
+$("speed").onchange = draw;
+draw();
+</script></body></html>
