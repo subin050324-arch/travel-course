@@ -26,12 +26,12 @@ function draw() {
   const a = Course.get(), path = me ? [me, ...a] : a, lg = legs(path);
   const sum = lg.reduce((x, y) => x + y, 0) * 1.3; // 직선거리 → 도로거리 보정(약 1.3배)
   const mins = Math.round(sum / $("speed").value * 60);
-  $("sN").textContent = a.length; $("sD").textContent = sum.toFixed(1) + " km";
+  $("sN").textContent = a.length; $("sD").textContent = fmtKm(sum);
   $("sT").textContent = a.length < 2 ? "-" : (mins >= 60 ? Math.floor(mins/60) + "시간 " : "") + mins % 60 + "분";
   $("list").innerHTML = a.length ? a.map((p, i) => `
     <div class="item"><div class="num">${i+1}</div><div style="flex:1"><h3><a href="detail.html?id=${p.id}">${esc(p.title)}</a></h3><p>${esc(p.addr)}</p>
     <div class="btns"><button class="sm" data-a="up" data-i="${i}">▲</button><button class="sm" data-a="down" data-i="${i}">▼</button><button class="sm" data-a="del" data-i="${i}">삭제</button></div></div></div>
-    ${i < a.length-1 ? '<div class="leg">↓ '+(legs(a)[i]).toFixed(1)+' km</div>' : ''}`).join("")
+    ${i < a.length-1 ? '<div class="leg">↓ '+fmtKm(legs(a)[i])+'</div>' : ''}`).join("")
     : '<div class="msg">담긴 장소가 없어요.<br><a href="index.html">여행지 탐색하러 가기</a></div>';
   layer.clearLayers();
   if (me) L.circleMarker([me.lat, me.lng], {radius: 8, color: "#e11d48"}).addTo(layer).bindPopup("내 위치");
