@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>장소 상세</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><link rel="stylesheet" href="css/style.css"></head><body>
+<main id="root"><div class="msg">불러오는 중…</div></main>
+<script src="js/config.js"></script><script src="js/common.js"></script>
+<script>
+header("i");
+(async () => {
+  const id = new URLSearchParams(location.search).get("id"), root = document.getElementById("root");
+  if (!id) { root.innerHTML = '<div class="msg">잘못된 접근입니다</div>'; return; }
+  try {
+    const i = (await api("detailCommon2", {contentId: id})).items[0], p = toPlace(i);
+    root.innerHTML = `<a href="index.html">← 목록으로</a>
+      <h1>${esc(i.title)} <small style="color:var(--sub);font-size:14px">${TYPES[i.contenttypeid] || ""}</small></h1>
+      ${p.img ? '<img class="hero" src="'+esc(p.img)+'">' : ''}
+      <div class="split" style="margin-top:14px"><div class="panel">
+       <p>📍 ${esc(p.addr)}</p>${i.tel ? '<p>☎ '+esc(i.tel)+'</p>' : ''}
+       ${i.homepage ? '<p>🔗 '+i.homepage+'</p>' : ''}
+       <p style="line-height:1.7">${esc(i.overview || "소개 정보가 없습니다.").replace(/\n/g, "<br>")}</p>
+       <button class="pri" id="add">${Course.has(p.id) ? "✔ 담김" : "+ 내 코스에 담기"}</button></div>
+       <div id="map"></div></div>`;
+    if (p.lat) {
+      const m = L.map("map").setView([p.lat, p.lng], 14);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {attribution: "© OpenStreetMap"}).addTo(m);
+      L.marker([p.lat, p.lng]).addTo(m);
+    }
+    document.getElementById("add").onclick = e => {
+      if (Course.add(p)) { e.target.textContent = "✔ 담김"; toast("코스에 담았어요"); } else toast("이미 담겨 있어요");
+    };
+  } catch (e) { root.innerHTML = '<div class="msg">⚠️ ' + esc(e.message) + '</div>'; }
+})();
+</script></body></html>
